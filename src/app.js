@@ -12,7 +12,25 @@ const publicApiLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standar
 
 app.disable('x-powered-by')
 app.use(helmet())
-app.use(cors({ origin: process.env.CLIENT_URL, methods: ['GET', 'POST', 'PATCH', 'DELETE'], allowedHeaders: ['Content-Type', 'Authorization'] }))
+// Comma-separated list of allowed frontend origins (CLIENT_URL). Local dev and the
+// deployed frontend are always allowed so production works even if CLIENT_URL is stale.
+const allowedOrigins = new Set(
+  ['http://localhost:5173', 'https://jelaniclient.vercel.app', ...(process.env.CLIENT_URL || '').split(',')]
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+)
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow non-browser callers (curl, Stripe, health checks) that send no Origin header.
+      if (!origin || allowedOrigins.has(origin.replace(/\/+$/, ''))) return callback(null, true)
+      return callback(null, false)
+    },
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+)
 // Stripe needs the raw body for signature verification, so mount before express.json().
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook)
 app.use(express.json({ limit: '64kb', type: 'application/json' }))
