@@ -3,7 +3,7 @@ import { supabase } from '../config/supabase.js'
 import { sanitizeFields } from '../middlewares/sanitize.js'
 import { unwrap } from '../utils/dbError.js'
 
-const SELECT = '*, course:courses(id, title)'
+const SELECT = '*'
 const nullable = (value) => (value === '' || value === undefined ? null : value)
 
 // Public: published events, soonest first (undated events last).
