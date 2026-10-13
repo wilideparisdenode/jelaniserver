@@ -2,6 +2,8 @@ import { matchedData } from 'express-validator'
 import { supabase } from '../config/supabase.js'
 import { unwrap } from '../utils/dbError.js'
 import { mapOrder } from '../utils/mappers.js'
+import { stripeClient } from '../services/stripe.js'
+import { settleOrderBySession } from '../services/orders.js'
 
 const SELECT = '*, course:courses(id, title)'
 
@@ -31,6 +33,26 @@ export async function confirmedCourseIds(userId) {
 
 export async function orderStatusBySession(req, res) {
   const { sessionId } = matchedData(req, { locations: ['params'] })
-  const row = unwrap(await supabase.from('orders').select(SELECT).eq('stripe_checkout_session_id', sessionId).eq('user_id', req.user.id).maybeSingle(), 'Order not found.')
+  let row = unwrap(await supabase.from('orders').select(SELECT).eq('stripe_checkout_session_id', sessionId).eq('user_id', req.user.id).maybeSingle(), 'Order not found.')
+
+  // Reconcile against Stripe when the student returns from checkout. This confirms the
+  // order from the paid session directly, so it does not depend solely on the webhook
+  // (which may be delayed or not configured). Only pending Stripe-backed orders are checked.
+  if (row.status === 'pending' && row.stripe_checkout_session_id?.startsWith('cs_')) {
+    try {
+      const session = await stripeClient().checkout.sessions.retrieve(row.stripe_checkout_session_id)
+      const intentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
+      if (session.payment_status === 'paid') {
+        await settleOrderBySession(row.stripe_checkout_session_id, intentId, true)
+        row = unwrap(await supabase.from('orders').select(SELECT).eq('id', row.id).single())
+      } else if (session.status === 'expired') {
+        await settleOrderBySession(row.stripe_checkout_session_id, intentId, false)
+        row = unwrap(await supabase.from('orders').select(SELECT).eq('id', row.id).single())
+      }
+    } catch {
+      // Swallow Stripe/network errors here; the webhook remains the source of truth.
+    }
+  }
+
   return res.json({ order: mapOrder(row) })
 }

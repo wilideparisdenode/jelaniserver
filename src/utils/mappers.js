@@ -53,5 +53,7 @@ export function mapOrder(row) {
     totalCents: row.total_cents,
     currency: row.currency,
     createdAt: row.created_at,
+    // For confirmed orders this is when the payment was settled.
+    updatedAt: row.updated_at,
   }
 }
