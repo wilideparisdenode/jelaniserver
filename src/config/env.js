@@ -7,6 +7,25 @@ export function assertEnv() {
   if (missing.length) throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
 }
 
+// The first CLIENT_URL entry is the canonical frontend origin used for redirects
+// (Stripe success/cancel, free-course return). Any extra comma-separated entries are
+// treated as additional allowed CORS origins, so a value like
+// "https://app.example.com,http://localhost:5173" never leaks into a redirect URL.
+export function frontendUrl() {
+  return (process.env.CLIENT_URL || '').split(',')[0].trim().replace(/\/+$/, '')
+}
+
+// Origins allowed to call the API from a browser (CORS).
+export function allowedOrigins() {
+  const defaults = ['http://localhost:5173', 'https://jelaniclient.vercel.app']
+  const sources = [process.env.CLIENT_URL, process.env.CORS_ORIGINS]
+  return [...new Set(
+    [...defaults, ...sources.flatMap((value) => (value || '').split(','))]
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
+  )]
+}
+
 // Fee model shown transparently to students at checkout.
 // Processing fee mirrors Stripe's published card pricing (percent + fixed),
 // grossed up so the school receives the full tuition amount.

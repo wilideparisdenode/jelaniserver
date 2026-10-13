@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { body, param } from 'express-validator'
 import { createCourse, deleteCourse, getCourse, listAdminCourses, listCourses, updateCourse } from '../controllers/coursesController.js'
-import { requireAdmin } from '../middlewares/auth.js'
+import { requireStaff } from '../middlewares/auth.js'
 import { validateRequest } from '../middlewares/validation.js'
 
 const router = Router()
@@ -27,10 +27,10 @@ const courseFields = [
 ]
 
 router.get('/', listCourses)
-router.get('/admin', requireAdmin, listAdminCourses)
-router.post('/admin', requireAdmin, body('id').isString().matches(/^[a-z0-9-]{2,80}$/), ...courseFields, validateRequest, createCourse)
-router.patch('/admin/:id', requireAdmin, idParam, ...courseFields.map((validator) => validator.optional()), validateRequest, updateCourse)
-router.delete('/admin/:id', requireAdmin, idParam, validateRequest, deleteCourse)
+router.get('/admin', requireStaff, listAdminCourses)
+router.post('/admin', requireStaff, body('id').isString().matches(/^[a-z0-9-]{2,80}$/), ...courseFields, validateRequest, createCourse)
+router.patch('/admin/:id', requireStaff, idParam, ...courseFields.map((validator) => validator.optional()), validateRequest, updateCourse)
+router.delete('/admin/:id', requireStaff, idParam, validateRequest, deleteCourse)
 router.get('/:id', idParam, validateRequest, getCourse)
 
 export default router

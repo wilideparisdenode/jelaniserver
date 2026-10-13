@@ -3,6 +3,7 @@ import { matchedData } from 'express-validator'
 import { supabase } from '../config/supabase.js'
 import { unwrap } from '../utils/dbError.js'
 import { calculateBreakdown } from '../utils/fees.js'
+import { frontendUrl } from '../config/env.js'
 import { stripeClient } from '../services/stripe.js'
 import { discardOrder, refundOrderByPaymentIntent, settleOrderBySession } from '../services/orders.js'
 
@@ -24,6 +25,13 @@ export async function createCheckoutSession(req, res) {
   const { courseId, branchId, name, phone } = matchedData(req, { locations: ['body'] })
   const course = await loadCourse(courseId)
   const breakdown = calculateBreakdown(course.price_cents)
+
+  // Already enrolled? Stop early with a clear message instead of tripping the
+  // `orders_one_live_per_course` unique index (which surfaced as an empty 409).
+  const confirmed = await supabase.from('orders').select('id').eq('user_id', req.user.id).eq('course_id', courseId).eq('status', 'confirmed').maybeSingle()
+  if (confirmed.data) {
+    return res.status(409).json({ error: { message: 'You are already registered for this course.' } })
+  }
 
   // Clear any stale pending order for the same course before creating a new one.
   await supabase.from('orders').delete().eq('user_id', req.user.id).eq('course_id', courseId).eq('status', 'pending')
@@ -49,7 +57,7 @@ export async function createCheckoutSession(req, res) {
   }).select('id').single())
 
   if (isFree) {
-    return res.status(201).json({ url: `${process.env.CLIENT_URL}/checkout/success?session_id=${freeSessionId}` })
+    return res.status(201).json({ url: `${frontendUrl()}/checkout/success?session_id=${freeSessionId}` })
   }
 
   try {
@@ -62,8 +70,8 @@ export async function createCheckoutSession(req, res) {
       ],
       metadata: { orderId: order.id, userId: req.user.id },
       payment_intent_data: { metadata: { orderId: order.id } },
-      success_url: `${process.env.CLIENT_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/checkout/cancel`,
+      success_url: `${frontendUrl()}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendUrl()}/checkout/cancel`,
     })
     unwrap(await supabase.from('orders').update({ stripe_checkout_session_id: session.id }).eq('id', order.id))
     return res.status(201).json({ url: session.url })
