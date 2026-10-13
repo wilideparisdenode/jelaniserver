@@ -3,7 +3,7 @@ import { matchedData } from 'express-validator'
 import { supabase } from '../config/supabase.js'
 import { unwrap } from '../utils/dbError.js'
 import { calculateBreakdown } from '../utils/fees.js'
-import { frontendUrl } from '../config/env.js'
+import { fees, frontendUrl } from '../config/env.js'
 import { stripeClient } from '../services/stripe.js'
 import { discardOrder, refundOrderByPaymentIntent, settleOrderBySession } from '../services/orders.js'
 
@@ -17,7 +17,14 @@ async function loadCourse(courseId) {
 export async function feeBreakdown(req, res) {
   const { courseId } = matchedData(req, { locations: ['query'] })
   const course = await loadCourse(courseId)
-  return res.json({ courseId: course.id, currency: course.currency, ...calculateBreakdown(course.price_cents) })
+  return res.json({
+    courseId: course.id,
+    currency: course.currency,
+    // The fee model is surfaced so the client can explain exactly how it is calculated.
+    feePercent: fees.percent,
+    feeFixedCents: fees.fixedCents,
+    ...calculateBreakdown(course.price_cents),
+  })
 }
 
 // Authenticated student: create a pending order and a Stripe Checkout session.

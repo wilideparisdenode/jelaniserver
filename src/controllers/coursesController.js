@@ -69,6 +69,13 @@ export async function updateCourse(req, res) {
 
 export async function deleteCourse(req, res) {
   const { id } = matchedData(req, { locations: ['params'] })
-  unwrap(await supabase.from('courses').delete().eq('id', id))
+  // Orders reference courses with ON DELETE RESTRICT, so a course with any enrollment
+  // history could not be deleted (it surfaced as "This record is referenced by other
+  // data."). Clear that course's orders first so deletion succeeds, then remove the
+  // course. Quizzes, announcements, Q&A and branch links cascade automatically, and
+  // alumni/testimonials simply drop their course link.
+  unwrap(await supabase.from('orders').delete().eq('course_id', id))
+  const deleted = unwrap(await supabase.from('courses').delete().eq('id', id).select('id'))
+  if (!deleted.length) throw Object.assign(new Error('Course not found.'), { status: 404 })
   return res.status(204).end()
 }

@@ -11,6 +11,13 @@ export async function requireUser(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token)
     if (error || !data?.user) return unauthorized(res)
 
+    // Accounts must confirm their email before they can use the platform. The browser
+    // blocks this at sign-in too, but enforcing it here means an unverified session can
+    // never reach the API even if the client check is bypassed.
+    if (!data.user.email_confirmed_at) {
+      return res.status(403).json({ error: { code: 'email_not_confirmed', message: 'Please verify your email address before continuing. Check your inbox for the confirmation link.' } })
+    }
+
     let profile = (await supabase.from('profiles').select('role, full_name, phone, avatar_url').eq('id', data.user.id).maybeSingle()).data
     if (!profile) {
       // Fallback for databases that have not applied the avatar migration yet.

@@ -22,11 +22,13 @@ create table if not exists public.profiles (
 );
 
 -- Auto-create a profile whenever a Supabase Auth user signs up.
+-- IMPORTANT: the role is always forced to 'student'. It is never read from the
+-- sign-up metadata, so a user can never grant themselves admin or tutor at sign-up.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, full_name, phone)
-  values (new.id, new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'phone')
+  insert into public.profiles (id, full_name, phone, role)
+  values (new.id, new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'phone', 'student')
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -361,6 +363,39 @@ create trigger events_touch before update on public.events
 -- Run after 004_features.sql.
 
 alter table public.profiles add column if not exists avatar_url text;
+
+
+-- ---------- migrations\006_role_hardening.sql ----------
+-- Security hardening for roles. Sign-ups always start as students and can never
+-- self-assign tutor/admin from the client: the role is set explicitly by the trigger
+-- below, ignoring any role value a user might put in their sign-up metadata.
+alter table public.profiles alter column role set default 'student';
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, full_name, phone, role)
+  values (new.id, new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'phone', 'student')
+  on conflict (id) do nothing;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Elevated roles are only ever granted from the admin dashboard (which requires an
+-- existing admin) or by an operator running server/scripts/set-role.js.
+--
+-- Audit everyone who is not a plain student:
+--   select p.id, u.email, p.role
+--   from public.profiles p join auth.users u on u.id = p.id
+--   where p.role <> 'student' order by p.role, u.email;
+--
+-- Correct a role that was assigned by mistake:
+--   update public.profiles set role = 'student' where id = '<auth user uuid>';
+
 
 
 
