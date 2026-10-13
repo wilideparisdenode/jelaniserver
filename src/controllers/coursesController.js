@@ -3,8 +3,22 @@ import { supabase } from '../config/supabase.js'
 import { sanitizeFields } from '../middlewares/sanitize.js'
 import { unwrap } from '../utils/dbError.js'
 import { courseToRow, mapCourse } from '../utils/mappers.js'
+import { slugify } from '../utils/slug.js'
 
 const SELECT = '*, category:categories(id, slug, name), course_branches(branch:branches(id, name, mode, city, address))'
+
+// Course ids are slugs generated from the title; the admin never types one.
+async function uniqueCourseId(title) {
+  let root = slugify(title)
+  if (root.length < 2) root = 'course'
+  root = root.slice(0, 70)
+  const rows = unwrap(await supabase.from('courses').select('id').like('id', `${root}%`))
+  const taken = new Set(rows.map((row) => row.id))
+  if (!taken.has(root)) return root
+  let suffix = 2
+  while (taken.has(`${root}-${suffix}`)) suffix += 1
+  return `${root}-${suffix}`
+}
 
 export async function listCourses(req, res) {
   let query = supabase.from('courses').select(SELECT).eq('published', true).order('created_at', { ascending: true })
@@ -36,6 +50,7 @@ async function setBranches(courseId, branchIds) {
 
 export async function createCourse(req, res) {
   const { branchIds, ...input } = sanitizeFields(matchedData(req, { locations: ['body'] }))
+  if (!input.id) input.id = await uniqueCourseId(input.title)
   const created = unwrap(await supabase.from('courses').insert(courseToRow(input)).select('id').single())
   await setBranches(created.id, branchIds)
   const row = unwrap(await supabase.from('courses').select(SELECT).eq('id', created.id).single())

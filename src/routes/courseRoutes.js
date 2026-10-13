@@ -21,14 +21,14 @@ const courseFields = [
   body('careerPathways.*.title').isString().trim().isLength({ min: 2, max: 120 }),
   body('careerPathways.*.description').optional().isString().trim().isLength({ max: 400 }),
   body('branchIds').optional().isArray({ max: 50 }),
-  body('branchIds.*').isUUID(),
+  body('branchIds.*').isString().matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
   body('image').optional({ values: 'falsy' }).isURL({ protocols: ['https'], require_protocol: true }),
   body('published').optional().isBoolean().toBoolean(),
 ]
 
 router.get('/', listCourses)
 router.get('/admin', requireStaff, listAdminCourses)
-router.post('/admin', requireStaff, body('id').isString().matches(/^[a-z0-9-]{2,80}$/), ...courseFields, validateRequest, createCourse)
+router.post('/admin', requireStaff, body('id').optional({ values: 'falsy' }).isString().matches(/^[a-z0-9-]{2,80}$/), ...courseFields, validateRequest, createCourse)
 router.patch('/admin/:id', requireStaff, idParam, ...courseFields.map((validator) => validator.optional()), validateRequest, updateCourse)
 router.delete('/admin/:id', requireStaff, idParam, validateRequest, deleteCourse)
 router.get('/:id', idParam, validateRequest, getCourse)

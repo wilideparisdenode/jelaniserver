@@ -10,7 +10,7 @@ import { deleteComment, listComments, setCommentApproval } from '../controllers/
 import { uploadImage } from '../controllers/uploadsController.js'
 import { listUsers, updateUserRole } from '../controllers/usersController.js'
 import { createEvent, deleteEvent, listAllEvents, updateEvent } from '../controllers/eventsController.js'
-import { createCrud } from '../utils/crud.js'
+import { createCategory, deleteCategory, listCategories, updateCategory } from '../controllers/categoriesController.js'
 import { requireAdmin, requireStaff } from '../middlewares/auth.js'
 import { validateRequest } from '../middlewares/validation.js'
 
@@ -26,17 +26,17 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.post('/uploads', requireStaff, upload.single('file'), uploadImage)
 
 // Categories — read is shared with tutors (course form); writes are admin-only.
-const categories = createCrud('categories', { order: ['sort_order', { ascending: true }] })
+// Slugs are generated from the name by the controller.
 const categoryFields = [
-  body('slug').isSlug().isLength({ min: 2, max: 80 }),
+  body('slug').optional({ values: 'falsy' }).isSlug().isLength({ min: 2, max: 80 }),
   body('name').isString().trim().isLength({ min: 2, max: 80 }),
   body('description').optional({ values: 'falsy' }).isString().trim().isLength({ max: 300 }),
   body('sort_order').optional().isInt({ min: 0, max: 1000 }).toInt(),
 ]
-router.get('/categories', requireStaff, categories.listAll)
-router.post('/categories', requireAdmin, ...categoryFields, validateRequest, categories.create)
-router.patch('/categories/:id', requireAdmin, uuid, ...categoryFields.map((v) => v.optional()), validateRequest, categories.update)
-router.delete('/categories/:id', requireAdmin, uuid, validateRequest, categories.remove)
+router.get('/categories', requireStaff, listCategories)
+router.post('/categories', requireAdmin, ...categoryFields, validateRequest, createCategory)
+router.patch('/categories/:id', requireAdmin, uuid, ...categoryFields.map((v) => v.optional()), validateRequest, updateCategory)
+router.delete('/categories/:id', requireAdmin, uuid, validateRequest, deleteCategory)
 
 // Orders & roster (admin).
 router.get('/orders', requireAdmin, listOrders)
