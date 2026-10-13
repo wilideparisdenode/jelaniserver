@@ -11,7 +11,11 @@ export async function requireUser(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token)
     if (error || !data?.user) return unauthorized(res)
 
-    const { data: profile } = await supabase.from('profiles').select('role, full_name, phone, avatar_url').eq('id', data.user.id).maybeSingle()
+    let profile = (await supabase.from('profiles').select('role, full_name, phone, avatar_url').eq('id', data.user.id).maybeSingle()).data
+    if (!profile) {
+      // Fallback for databases that have not applied the avatar migration yet.
+      profile = (await supabase.from('profiles').select('role, full_name, phone').eq('id', data.user.id).maybeSingle()).data
+    }
     req.user = {
       id: data.user.id,
       email: data.user.email,
