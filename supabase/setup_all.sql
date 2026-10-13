@@ -356,4 +356,12 @@ create trigger events_touch before update on public.events
 --   update public.profiles set role = 'tutor' where id = '<auth user uuid>';
 
 
+-- ---------- migrations\005_profile_avatar.sql ----------
+-- Profile avatars: users can upload a profile picture shown in the navbar and profile page.
+-- Run after 004_features.sql.
+
+alter table public.profiles add column if not exists avatar_url text;
+
+
+
 

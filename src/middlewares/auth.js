@@ -11,13 +11,14 @@ export async function requireUser(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token)
     if (error || !data?.user) return unauthorized(res)
 
-    const { data: profile } = await supabase.from('profiles').select('role, full_name, phone').eq('id', data.user.id).maybeSingle()
+    const { data: profile } = await supabase.from('profiles').select('role, full_name, phone, avatar_url').eq('id', data.user.id).maybeSingle()
     req.user = {
       id: data.user.id,
       email: data.user.email,
       role: profile?.role ?? 'student',
       fullName: profile?.full_name ?? null,
       phone: profile?.phone ?? null,
+      avatarUrl: profile?.avatar_url ?? null,
     }
     next()
   } catch (error) {
